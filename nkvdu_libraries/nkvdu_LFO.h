@@ -91,6 +91,11 @@ public:
                 return sine();
                 break;
             }
+            default:
+            {
+                return 0.f;
+                break;
+            }
         }
         // return 0.f;
     }
