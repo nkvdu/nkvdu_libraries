@@ -15,6 +15,26 @@
 
 namespace nkvdu_memoryless {
 
+    template<typename t>
+    void metaparamA(t x, t *y)   {
+        // y should be a 2-component array
+        
+        // i fed y with "metap+0"
+        if (x < 0.333) {
+            y[0] = x * 3;
+            y[1] = 0;
+        }
+        else    {
+            y[0] = (x < 0.666) ? 1 : 1 - (x - 0.666) * 3;
+            y[1] = (x < 0.666) ? x - 0.333 * 3 : 1;
+        }
+    }
+
+    template <typename t>
+    void metaparamB(t x, t *y0, t *y1){
+
+    }
+
     // linear interpolate. does not check for fade being between 0 and 1.
     template<typename t>
     t linterp(t x, t y, t fade)
