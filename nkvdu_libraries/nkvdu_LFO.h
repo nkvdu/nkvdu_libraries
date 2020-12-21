@@ -11,6 +11,7 @@
 #pragma once
 #include "nkvdu_memoryless.h"
 
+namespace nvssynthesis_lfo {
 class simple_lfo
 {
 public:
@@ -106,3 +107,5 @@ private:
     float _phase;
     nkvdu_memoryless::trigTables shapes;
 };
+
+}

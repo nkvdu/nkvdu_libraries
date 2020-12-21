@@ -9,6 +9,7 @@
 #pragma once
 #include "nkvdu_memoryless.h"
 
+namespace nkvdu_filters {
 class filter_abstract
 {
 public:
@@ -42,9 +43,12 @@ public:
     float _oneOverBlockSize, _cutoffTarget, _resonanceTarget;
     float z1;
 };
+    
 inline filter_abstract::~filter_abstract() { }
 //==================================================================================
 
+
+    
 class onePole   :   public filter_abstract
 {
 public:
@@ -759,14 +763,16 @@ public:
     void updateResonance(float res_target, float oneOverBlockSize)
     {
     }
-    
+    void updateR(float R_target, float oneOverBlockSize)
+    {
+        R += (R_target - R) * oneOverBlockSize;
+    }
     float filter(float x)
     {
         yz1 = x - xz1 + R * yz1;
         xz1 = x;
         return yz1;
     }
-    
 private:
     float R, xz1, yz1;
 };
@@ -885,4 +891,177 @@ public:
     }
 };
 
+class tvap  :   public filter_abstract
+{
+public:
+    tvap() {
+    }
+    ~tvap() {
+    }
+    //==============================================================================
+    virtual void setSampleRate(float sample_rate)
+    {
+        this->sampleRate = sample_rate;
+        this->T = 1.f / sample_rate;
+        lp.setSampleRate(sample_rate);
+        lp.updateCutoff(sample_rate * 0.125f, 1.f);
+    }
+    
+    void clear(){
+        sp->z1 = sp->z2 = sp->fb_proc = 0.f;
+    };
+    void updateCutoff(float cutoff_target, float oneOverBlockSize) {
+        if (cutoff_target < 0) cutoff_target = 0;
+        f_pi += (cutoff_target - f_pi) * oneOverBlockSize;
+        calc_b1();
+    }
+    void updateResonance(float res_target, float oneOverBlockSize) {
+        //if (f_b <= 0) f_b = 0.0000000001;
+        f_b += (res_target - f_b) * oneOverBlockSize;
+        f_b_to_b0();
+    }
+// function aliases just to have more meaningful names
+    void update_f_pi (float f_pi_target, float oneOverBlockSize)
+    {   updateCutoff(f_pi_target, oneOverBlockSize); }
+    void update_f_b(float f_b_target, float oneOverBlockSize)
+    {   updateResonance(f_b_target, oneOverBlockSize); }
+    
+    void calc_b1(void) {
+        float d = -1 * cosf((2.f * PI * f_pi) / sampleRate);
+        float c = (tanf(PI * f_b / sampleRate) - 1.f) / (tanf(PI * f_b / sampleRate) + 1.f);
+        float r1 = acosf(-1.f * c);
+        float r2 = acosf(-1.f * d);
+        b1 = cosf(r1) * (1.f + cosf(r2));
+    }
+    void f_b_to_b0(void) {
+        float c = (tanf(PI * f_b / sampleRate) - 1.f) / (tanf(PI * f_b / sampleRate) + 1.f);
+        float r1 = acosf(-1.f * c);
+        b0 = cosf(r1);
+    }
 
+    float f_pi2r2(float _f_pi)
+    {
+        float d = -1 * cosf((2.f * PI * _f_pi) / sampleRate);
+        float r2 = acosf(-d);
+        return r2;
+    }
+    float f_b2r1(float _f_b)
+    {
+        float tmp = tanf(PI * _f_b / sampleRate);
+        float c = (tmp - 1.f) / (tmp + 1.f);
+        float r1 = acosf(-c);
+        return r1;
+    }
+
+    float filter(float x_n) {
+        /* float _y1 = state.y1;
+        float _y2 = state.y2;
+        float _x1 = state.x1;
+        float _x2 = state.x2;
+        float y_n = b0 * x_n - b1 * _x1 + _x2 + b1 * _y1 - b0 * _y2;
+        state.y2 = _y1;
+        state.y1 = y_n;
+        state.x2 = _x1;
+        state.x1 = x_n;
+        return y_n; */
+        float _r1, _r2, _cr1, _cr2, _sr1, _sr2;
+        float tmp [3];
+        _r1 = f_b2r1(f_b);
+        _r2 = f_pi2r2(f_pi);
+
+        _cr1 = cos(_r1);
+        _sr1 = sin(_r1);
+        _cr2 = cos(_r2);
+        _sr2 = sin(_r2);
+        //tmp[0] = _x_n;
+        tmp[1] = _cr2 * z1 - _sr2 * state.z2;
+        //tmp[2] = _sr2 * _z1 + _cr2 * _z2;
+
+        tmp[0] = _cr1 * x_n - _sr1 * tmp[1];
+        tmp[1] = _sr1 * x_n + _cr1 * tmp[1];
+        tmp[2] = _sr2 * z1 + _cr2 * state.z2;
+
+        state.z1 = tmp[1];
+        state.z2 = tmp[2];
+
+        return tmp[0];
+    }
+    
+    // should be in memoryless but got linker error
+    inline float unboundSat2(float x)
+    {
+        float num = 2.f * x;
+        float denom = 1.f + sqrt(1.f + fabs(4.f * x));
+        return num / denom;
+    }
+    
+    float filter_fbmod(float x_n, float fb_f_pi, float fb_f_b)
+    {
+        float _f_pi_n, _f_b_n;
+        _f_pi_n = f_pi;
+        _f_b_n = f_b;
+
+        fb_f_pi *= f_pi;
+        fb_f_pi *= 1000.f;
+        fb_f_b *= f_pi;
+        fb_f_b *= 1000.f;
+        
+        _f_pi_n += unboundSat2(state.fb_proc * fb_f_pi)* 10.f;
+        _f_b_n  += unboundSat2(state.fb_proc * fb_f_b) * 10.f;
+
+        // if (_f_b_n < 0.f) _f_b_n = 0.f;
+        if (_f_b_n < 0.f) 
+            _f_b_n = expf(_f_b_n);
+        else    
+            _f_b_n += 1.f;
+
+        float highLimit = (sampleRate * 0.495f);
+        if (_f_pi_n >= highLimit) _f_pi_n = highLimit;
+        if (_f_b_n >= highLimit) _f_b_n = highLimit;
+
+        float _r1, _r2, _cr1, _cr2, _sr1, _sr2;
+        float tmp[3];
+        _r1 = f_b2r1(_f_b_n);
+        _r2 = f_pi2r2(_f_pi_n);
+
+        _cr1 = cos(_r1);
+        _sr1 = sin(_r1);
+        _cr2 = cos(_r2);
+        _sr2 = sin(_r2);
+        //tmp[0] = _x_n;
+        tmp[1] = _cr2 * state.z1 - _sr2 * state.z2;
+        //tmp[2] = _sr2 * _z1 + _cr2 * _z2;
+
+        tmp[0] = _cr1 * x_n - _sr1 * tmp[1];
+        tmp[1] = _sr1 * x_n + _cr1 * tmp[1];
+        tmp[2] = _sr2 * state.z1 + _cr2 * state.z2;
+
+        state.z1 = tmp[1];
+        state.z2 = tmp[2];
+
+        
+        float fb_filt = dcFilt.filter(tmp[0]);   // used to feed output to modulate control inputs
+        fb_filt = lp.tpt_lp(fb_filt);
+        //fb_filt = 0.5f * (fb_filt + _fb_filt_z1);
+        state.fb_proc = fb_filt;
+
+        return tmp[0];
+    }
+    
+protected:
+    typedef struct tvapstate {
+        //float x1, x2, y1, y2;
+        float z1, z2;
+        float fb_proc;  // processed fed back output sample
+    } _tvapstate;
+    _tvapstate state = {.z1 = 0.f, .z2 = 0.f, .fb_proc =0.f};
+    _tvapstate *sp = &state;
+
+    dcBlock dcFilt;
+    onePole lp;
+private:
+    float f_pi, f_b;
+    float b0, b1;
+};
+
+}

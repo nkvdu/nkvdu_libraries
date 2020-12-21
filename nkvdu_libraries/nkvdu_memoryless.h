@@ -9,7 +9,7 @@
 */
 
 #pragma once
-#include <cmath>
+#include <math.h>
 #define PI      3.141592653589793
 #define TWOPI   6.283185307179586
 
@@ -89,6 +89,17 @@ namespace nkvdu_memoryless {
         return input;
     }
 
+//    float unboundSat1(float x)
+//    {
+//        return logf(x + sqrt(x*x + 1.f));
+//    }
+//    float unboundSat2(float x)
+//    {
+//        float num = 2.f * x;
+//        float denom = 1.f + sqrt(1.f + fabs(4.f * x));
+//        return num / denom;
+//    }
+
     template<typename t>
     t crush(t input, t depth)
     {
@@ -143,6 +154,11 @@ namespace nkvdu_memoryless {
     {
         return (sqrt(1 - phi)) * taySin(x) + (sqrt(phi)) * tayCos(x);
     }*/
+    template<typename t>
+    t atan_aprox(t x)
+    {
+        return x / (1 + (0.28125 * x) * (0.28125 * x));
+    }
     
     class trigTables
     {
