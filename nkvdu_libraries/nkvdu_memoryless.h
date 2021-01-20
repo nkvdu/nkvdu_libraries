@@ -26,7 +26,7 @@ namespace nkvdu_memoryless {
         }
         else    {
             y[0] = (x < 0.666) ? 1 : 1 - (x - 0.666) * 3;
-            y[1] = (x < 0.666) ? x - 0.333 * 3 : 1;
+            y[1] = (x < 0.666) ? (x - 0.333) * 3 : 1;
         }
     }
 
@@ -180,6 +180,52 @@ namespace nkvdu_memoryless {
         return x / (1 + (0.28125 * x) * (0.28125 * x));
     }
     
+    class cosTable {
+    public:
+        cosTable()
+        :   m_size(32768) {
+            
+            for (int i = 0; i < m_size; i++) {
+                LUT[i] = cosf(((float)(i*4) / (float)m_size) * TWOPI);
+            }
+            
+        }
+        float cos(float x)
+        {
+            x = x * 0.318309886183791; // divide out PI
+            x = wrap<float>(x, 0.f, 2.f); // repeats between 0 and 2PI
+            
+            float cosx;
+            int idx;
+            if (x < 0.5f){
+                idx = int(x * (float)m_size * 4.f);
+                cosx = LUT[idx];
+            }
+            else if (x < 1.f) {
+                x -= 0.5f;
+                x = 0.5f - x;
+                idx = int(x * (float)m_size * 4.f);
+                cosx = -1.f * LUT[idx];
+            }
+            else if (x < 1.5f) {
+                x -= 1.f;
+                idx = int(x * (float)m_size * 4.f);
+                cosx = -1.f * LUT[idx];
+            }
+            else {
+                x -= 1.5f;
+                x = 0.5f - x;
+                idx = int(x * (float)m_size * 4.f);
+                cosx = LUT[idx];
+            }
+            return cosx;
+        }
+        
+    private:
+        int m_size;
+        float LUT[32768];
+    };
+    
     class trigTables
     {
     public:
@@ -214,7 +260,7 @@ namespace nkvdu_memoryless {
         }
         float up_cos_LUT(float x)  // unipolar input [0..1] mapped to [-pi..pi]
         {
-            x = (clamp<float>(x,0.f,1.f));
+            x = (wrap<float>(x,0.f,1.f));
             float frac = ceil(x) - x;
             return linterp<float>(cos_table[(int)floor(x * m_size)],
                                   cos_table[(int)ceil (x * m_size)],
@@ -222,10 +268,14 @@ namespace nkvdu_memoryless {
         }
         float bp_cos_LUT(float x)  // bipolar input [-1..1] mapped to [-pi..pi]
         {
-            x = biuni<float>(clamp1<float>(x));
+            x = wrap<float>(x, -1.f, 1.f);
+            x = 0.f;
             float frac = ceil(x) - x;
-            return linterp<float>(cos_table[(int)floor(x * m_size)],
-                                  cos_table[(int)ceil (x * m_size)],
+            int fl = (int)floor(x * m_size);
+            int ce = (int)ceil (x * m_size);
+            ce = ce + (fl == ce);
+            return linterp<float>(cos_table[fl],
+                                  cos_table[ce],
                                   frac);
         }
         

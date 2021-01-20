@@ -1024,10 +1024,10 @@ public:
         _r1 = f_b2r1(_f_b_n);
         _r2 = f_pi2r2(_f_pi_n);
 
-        _cr1 = cos(_r1);
-        _sr1 = sin(_r1);
-        _cr2 = cos(_r2);
-        _sr2 = sin(_r2);
+        _cr1 = cosf(_r1);
+        _sr1 = sinf(_r1);
+        _cr2 = cosf(_r2);
+        _sr2 = sinf(_r2);
         //tmp[0] = _x_n;
         tmp[1] = _cr2 * state.z1 - _sr2 * state.z2;
         //tmp[2] = _sr2 * _z1 + _cr2 * _z2;
@@ -1047,6 +1047,7 @@ public:
 
         return tmp[0];
     }
+    nkvdu_memoryless::trigTables _LUT;
     
 protected:
     typedef struct tvapstate {
@@ -1054,7 +1055,7 @@ protected:
         float z1, z2;
         float fb_proc;  // processed fed back output sample
     } _tvapstate;
-    _tvapstate state = {.z1 = 0.f, .z2 = 0.f, .fb_proc =0.f};
+    _tvapstate state = {.z1 = 0.f, .z2 = 0.f, .fb_proc = 0.f};
     _tvapstate *sp = &state;
 
     dcBlock dcFilt;
